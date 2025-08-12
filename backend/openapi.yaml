@@ -1,0 +1,564 @@
+openapi: 3.0.3
+info:
+  title: Consulto API
+  version: 0.2.0
+  description: >-
+    REST API for Consulto. Access tokens are short-lived JWTs. Refresh tokens are
+    UUID values stored server-side and rotated on each refresh. Version 0.2.0 adds
+    enriched Doctor schema (rating, degree, experienceYears, about, availability),
+    public doctor listing/detail, slots endpoint, and image upload endpoint.
+servers:
+  - url: http://localhost:8080
+paths:
+  /auth/register:
+    post:
+      summary: Register a new user
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 6 }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserResponse'
+        '409': { $ref: '#/components/responses/EmailExists' }
+  /auth/login:
+    post:
+      summary: Login with email + password
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/LoginSuccess' }
+        '401': { $ref: '#/components/responses/InvalidCredentials' }
+  /auth/refresh:
+    post:
+      summary: Rotate refresh token and issue new access token
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string, format: uuid }
+      responses:
+        '200': { $ref: '#/components/responses/RefreshSuccess' }
+        '401': { $ref: '#/components/responses/InvalidRefresh' }
+  /auth/logout:
+    post:
+      summary: Revoke a refresh token
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+  /doctors:
+    get:
+      summary: List doctors
+      description: Public listing of doctors (authentication optional). Supports filtering & pagination.
+      tags: [Doctors]
+      parameters:
+        - in: query
+          name: speciality
+          schema: { type: string }
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Doctor' }
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      limit: { type: integer }
+                      total: { type: integer }
+    post:
+      summary: Create doctor
+      security: [{ bearerAuth: [] }]
+      tags: [Doctors]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [name, speciality, fee, addressLine1, image]
+              properties:
+                name: { type: string }
+                speciality: { type: string }
+                fee: { type: number }
+                addressLine1: { type: string }
+                addressLine2: { type: string }
+                degree: { type: string }
+                experienceYears: { type: integer }
+                about: { type: string }
+                rating: { type: number }
+                availability: { type: object }
+                image: { type: string, format: binary }
+      responses:
+        '201': { $ref: '#/components/responses/DoctorCreated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /doctors/{id}:
+    get:
+      summary: Get doctor by id
+      description: Public doctor detail (authentication optional)
+      tags: [Doctors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/DoctorSingle' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      summary: Update doctor
+      security: [{ bearerAuth: [] }]
+      tags: [Doctors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DoctorUpdate'
+      responses:
+        '200': { $ref: '#/components/responses/DoctorSingle' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /doctors/{id}/slots:
+    get:
+      summary: Get available slots
+      description: Returns a list of time slots (placeholder in v0.2; future versions compute from availability & booked appointments).
+      tags: [Doctors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+        - in: query
+          name: date
+          description: Filter slots by date (YYYY-MM-DD, server timezone or UTC agreed)
+          schema: { type: string, pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' }
+      responses:
+        '200':
+          description: Slots
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DoctorSlot' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /doctors/{id}/image:
+    put:
+      summary: Upload or replace doctor image
+      description: Uploads a new doctor profile image. Returns updated doctor with image URL. Use multipart/form-data. (Planned endpoint; ensure server implemented.)
+      security: [{ bearerAuth: [] }]
+      tags: [Doctors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200': { $ref: '#/components/responses/DoctorSingle' }
+        '400': { description: Invalid file }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /users:
+    get:
+      summary: List users (admin)
+      security: [{ bearerAuth: [] }]
+      tags: [Users]
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/User' }
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      limit: { type: integer }
+                      total: { type: integer }
+  /users/me:
+    get:
+      summary: Get current user
+      security: [{ bearerAuth: [] }]
+      tags: [Users]
+      responses:
+        '200':
+          description: Self
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    patch:
+      summary: Update current user
+      security: [{ bearerAuth: [] }]
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 6 }
+      responses:
+        '200': 
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '409': { $ref: '#/components/responses/EmailExists' }
+    delete:
+      summary: Delete current user
+      security: [{ bearerAuth: [] }]
+      tags: [Users]
+      responses:
+        '204': { description: Deleted }
+  /users/{id}:
+    get:
+      summary: Get user by id (admin)
+      security: [{ bearerAuth: [] }]
+      tags: [Users]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: User
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      summary: Update user (admin)
+      security: [{ bearerAuth: [] }]
+      tags: [Users]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 6 }
+                role: { type: string, enum: [PATIENT, DOCTOR, ADMIN] }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/EmailExists' }
+    delete:
+      summary: Delete user (admin)
+      security: [{ bearerAuth: [] }]
+      tags: [Users]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /appointments:
+    get:
+      summary: List appointments (scoped)
+      security: [{ bearerAuth: [] }]
+      tags: [Appointments]
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Appointment' }
+    post:
+      summary: Create appointment
+      security: [{ bearerAuth: [] }]
+      tags: [Appointments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentCreate'
+      responses:
+        '201': { $ref: '#/components/responses/AppointmentCreated' }
+        '400': { $ref: '#/components/responses/SlotTaken' }
+  /appointments/{id}/cancel:
+    patch:
+      summary: Cancel appointment
+      security: [{ bearerAuth: [] }]
+      tags: [Appointments]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/AppointmentSingle' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /health:
+    get:
+      summary: Health check
+      tags: [Health]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [UP, DOWN] }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    UserSafe:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        role: { type: string, enum: [PATIENT, DOCTOR, ADMIN] }
+    AuthUserResponse:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/UserSafe' }
+    LoginSuccess:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string, format: uuid }
+        user: { $ref: '#/components/schemas/UserSafe' }
+    RefreshSuccess:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string, format: uuid }
+    Doctor:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        image: { type: string, nullable: true }
+        speciality: { type: string }
+        degree: { type: string, nullable: true }
+        experienceYears: { type: integer, minimum: 0 }
+        about: { type: string, nullable: true }
+        fee: { type: number }
+        addressLine1: { type: string }
+        addressLine2: { type: string, nullable: true }
+        active: { type: boolean }
+        rating: { type: number, format: float }
+        availability: { type: object, nullable: true, description: JSON schedule rules }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    DoctorCreate:
+      type: object
+      required: [name, speciality, fee, addressLine1]
+      properties:
+        name: { type: string }
+        speciality: { type: string }
+        fee: { type: number }
+        addressLine1: { type: string }
+        addressLine2: { type: string }
+        degree: { type: string }
+        experienceYears: { type: integer }
+        about: { type: string }
+        image: { type: string }
+        availability: { type: object }
+        rating: { type: number }
+    DoctorUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        speciality: { type: string }
+        fee: { type: number }
+        addressLine1: { type: string }
+        addressLine2: { type: string }
+        degree: { type: string }
+        experienceYears: { type: integer }
+        about: { type: string }
+        image: { type: string }
+        active: { type: boolean }
+        availability: { type: object }
+        rating: { type: number }
+    DoctorSlot:
+      type: object
+      properties:
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time }
+        available: { type: boolean }
+    Appointment:
+      type: object
+      properties:
+        id: { type: string }
+        doctorId: { type: string }
+        patientId: { type: string }
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time }
+        status: { type: string, enum: [BOOKED, CANCELLED, COMPLETED] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AppointmentCreate:
+      type: object
+      required: [doctorId, start, end]
+      properties:
+        doctorId: { type: string }
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time }
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [PATIENT, DOCTOR, ADMIN] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+  responses:
+    EmailExists:
+      description: Email already registered
+    InvalidCredentials:
+      description: Invalid credentials
+    InvalidRefresh:
+      description: Invalid refresh token
+    LoginSuccess:
+      description: Login success
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/LoginSuccess' }
+    RefreshSuccess:
+      description: Token refresh success
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/RefreshSuccess' }
+    DoctorCreated:
+      description: Doctor created
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Doctor' }
+    DoctorSingle:
+      description: Doctor
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Doctor' }
+    AppointmentCreated:
+      description: Appointment created
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Appointment' }
+    AppointmentSingle:
+      description: Appointment
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Appointment' }
+    SlotTaken:
+      description: Slot already taken
+    NotFound:
+      description: Resource not found
+    Forbidden:
+      description: Forbidden

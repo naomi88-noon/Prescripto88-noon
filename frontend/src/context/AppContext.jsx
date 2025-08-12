@@ -1,109 +1,50 @@
-import React from 'react'
-import {createContext, useContext,  useState,} from 'react'
-import {useNavigate,  useParams, } from 'react-router-dom'
-import doc1 from '../assets/assets_frontend/doc1.png';
-import doc2 from '../assets/assets_frontend/doc2.png';
-import doc3 from '../assets/assets_frontend/doc3.png';
-import doc4 from '../assets/assets_frontend/doc4.png';
-import doc5 from '../assets/assets_frontend/doc5.png';
-import doc6 from '../assets/assets_frontend/doc6.png';
-import doc7 from '../assets/assets_frontend/doc7.png';
+import React, { createContext, useState } from 'react'
+import { doctors as seedDoctors } from '../assets/assets_frontend/assets'
 
 export const AppContext = createContext();
 
-const AppContextProvider  = (props) => {
+// Map assets doctors to normalized schema expected by components
+const mapToDomainDoctor = (d) => ({
+  id: d._id,
+  name: d.name,
+  image: d.image,
+  speciality: d.speciality,
+  degree: d.degree,
+  experience: d.experience,
+  about: d.about,
+  fee: d.fees,
+  address: d.address,
+});
 
-     const currencySymbol = '$';
-const [doctors, setDoctors] = useState([
-    { 
-    id: 1,
-    name: 'Dr. John Doe',
-    img: doc1,
-    speciality: 'General Physician',
-    address: {
-      line1: '123 Heart St',
-      line2: 'Suite 200',
-    },
-   },
-    
-   
-    {
-    id: 2,
-    name: 'Dr Naomi Gold',
-    img: doc2,
-    speciality: 'Neurology',
-    address: {
-      line1: '456 Brain Rd',
-      line2: 'Office 304',
-    },
-  },
-   
-    {
-    id: 3,
-    name: 'Dr. Cedric',
-    img: doc3,
-    speciality: 'Neurology',
-    address: {
-      line1: '456 Brain Rd',
-      line2: 'Office 304',
-    },
-  },
-   
-    {
-    id: 4,
-    name: 'Dr. Noella',
-    img: doc4,
-    speciality: 'Neurology',
-    address: {
-      line1: '456 Brain Rd',
-      line2: 'Office 304',
-    },
-  },
-   
-    {
-    id: 5,
-    name: 'Dr. Blessing',
-    img: doc5,
-    speciality: 'Neurology',
-    address: {
-      line1: '456 Brain Rd',
-      line2: 'Office 304',
-    },
-  },
-   
-    {
-    id: 6,
-    name: 'Dr. John ',
-    img: doc6,
-    speciality: 'Neurology',
-    address: {
-      line1: '456 Brain Rd',
-      line2: 'Office 304',
-    },
-  },
-   
-    {
-    id: 7,
-    name: 'Dr. Kamdem Christian',
-    img: doc7,
-    speciality: 'Neurology',
-    address: {
-      line1: '456 Brain Rd',
-      line2: 'Office 304',
-    },
-  },
-  ]);
-    const value = {
-        doctors,
-        setDoctors,
-        currencySymbol
-    };
+const AppContextProvider = (props) => {
+  const currencySymbol = '$';
+  const [doctors, setDoctors] = useState(seedDoctors.map(mapToDomainDoctor));
+  // rudimentary auth/user placeholder until real backend integration
+  const [user, setUser] = useState(null); // { id, name, role }
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const isAdmin = user?.role === 'ADMIN';
+
+  // Demo auth functions (replace with real API integration)
+  const loginDemo = (role = 'PATIENT') => setUser({ id: 'demo', name: role === 'ADMIN' ? 'Admin User' : 'Demo User', role });
+  const logout = () => setUser(null);
+
+  const value = {
+    doctors,
+    setDoctors,
+    currencySymbol,
+    user,
+    setUser,
+    isAdmin,
+    loginDemo,
+    logout,
+    searchTerm,
+    setSearchTerm,
+  };
 
   return (
-    <AppContext.Provider value={value}>
-        {props.children}
-      </AppContext.Provider>
-  )
-}
+    <AppContext.Provider value={value}>{props.children}</AppContext.Provider>
+  );
+};
 
 export default AppContextProvider

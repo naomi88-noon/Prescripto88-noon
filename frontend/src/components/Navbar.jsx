@@ -1,71 +1,89 @@
-import React, { useState } from 'react'
+import React, { useState, useContext } from 'react'
 import { assets } from '../assets/assets_frontend/assets'
 // import imageName  from "../assets/assets/assets_frontend/profile_pic.png"
 import { NavLink, useNavigate } from 'react-router-dom'
+import { AppContext } from '../context/AppContext'
 
 const Navbar = () => {
 
   const navigate = useNavigate();
 
   const [showMenu, setShowMenu] = useState(false)
-  const [token, setToken] = useState(true)
+  const { user, isAdmin, loginDemo, logout, searchTerm, setSearchTerm } = useContext(AppContext);
   return (
     <div className="flex w-full items-center justify-between text-sm py-4 mb-5 border-b border-b-gray-400">
       <img onClick={() => navigate('/')} className='w-44 cursor-pointer' src={assets.logo} alt="" />
-      <ul className='hidden md:flex items-start gap-5 font-meduim'>
-        <NavLink to='/' className="active">
-          <li className='py-1'>HOME</li>
-          <hr className='border-none outline-none h-0.5 bg-white w-3/5 m-auto hidden ' />
-        </NavLink>
-        <NavLink to='/doctor'>
-          <li className='py-1'>All DOCTORS</li>
-          <hr className='border-none outline-none h-0.5 bg-white w-3/5 m-auto hidden' />
-        </NavLink>
-        <NavLink to='/about'>
-          <li className='py-1'>ABOUT</li>
-          <hr className='border-none outline-none h-0.5 bg-white w-3/5 m-auto hidden' />
-        </NavLink >
-        <NavLink to='/contact'>
-          <li className='py-1'>CONTACT</li>
-          <hr className='border-none outline-none h-0.5 bg-white w-3/5 m-auto hidden' />
-        </NavLink>
-
+      <ul className='hidden md:flex items-center gap-6 font-medium'>
+        <NavLink to='/' className={({isActive})=> isActive ? 'text-primary font-semibold' : 'hover:text-primary'}>Home</NavLink>
+        <NavLink to='/doctors' className={({isActive})=> isActive ? 'text-primary font-semibold' : 'hover:text-primary'}>Doctors</NavLink>
+        <NavLink to='/about' className={({isActive})=> isActive ? 'text-primary font-semibold' : 'hover:text-primary'}>About</NavLink>
+        <NavLink to='/contact' className={({isActive})=> isActive ? 'text-primary font-semibold' : 'hover:text-primary'}>Contact</NavLink>
+        {isAdmin && (
+          <NavLink to='/admin/overview' className={({isActive})=> isActive ? 'text-primary font-semibold' : 'hover:text-primary'}>Admin</NavLink>
+        )}
       </ul>
+      <div className='hidden md:block w-56'>
+        <input
+          value={searchTerm}
+            onChange={e=> setSearchTerm(e.target.value)}
+            placeholder='Search doctors...'
+            className='w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary/40'
+        />
+      </div>
       <div className='flex items-center gap-4'>
-        {
-          token ? <div className='flex intems-center gap-2 cursor pointer group relative'>
-            <img className='w-8 rounded-full' src={assets.profile_pic} alt="" />
+        {user ? (
+          <div className='flex items-center gap-2 cursor-pointer group relative'>
+            <img className='w-8 h-8 object-cover rounded-full ring-1 ring-primary/30' src={assets.profile_pic} alt="" />
             <img className='w-2.5' src={assets.dropdown_icon} alt="" />
-            <div className='absolute top-0 right-0 pt-14 text-base font-meduim text-gray-600 z-20 hidden group-hover:block'>
-              <div className='min-w-48 bg-stone-100 rounded flex flex-col gap-4 p-4' >
-                <p onClick={() => navigate('my-profile')} className='hover:text-black cursor-pointer'>My Profile</p>
-                <p onClick={() => navigate('MyAppointment')} className='hover:text-black cursor-pointer'>My Appointment</p>
-                <p onClick={() => setToken(false)} className='hover:text-black cursor-pointer'>Logout</p>
-                <p onClick={() => navigate('Appointment')} className='hover:text-black cursor-pointer'>Appointment</p>
-
+            <div className='absolute top-0 right-0 pt-14 text-sm font-medium text-gray-600 z-20 hidden group-hover:block'>
+              <div className='min-w-48 bg-white border rounded-md shadow-xl flex flex-col gap-2 p-4'>
+                <p className='text-xs text-gray-500'>{user.name} ({user.role})</p>
+                <button onClick={() => navigate('/my-profile')} className='text-left hover:text-primary'>My Profile</button>
+                <button onClick={() => navigate('/my-appointments')} className='text-left hover:text-primary'>My Appointments</button>
+                {isAdmin && <button onClick={()=> navigate('/admin/overview')} className='text-left hover:text-primary'>Admin Dashboard</button>}
+                <button onClick={logout} className='text-left text-red-500 hover:text-red-600'>Logout</button>
               </div>
             </div>
           </div>
-            : <button onClick={() => { localStorage.removeItem("token"); navigate('/logout') }} className='bg-primary text-white px-8 py-3 rounded-full font-light hidden md:block' > Create Account </button>
-        }
-
+        ) : (
+          <div className='hidden md:flex items-center gap-2'>
+            <button onClick={() => loginDemo('PATIENT')} className='px-4 py-2 text-sm border rounded hover:bg-gray-50'>Demo Patient</button>
+            <button onClick={() => loginDemo('ADMIN')} className='px-4 py-2 text-sm border rounded hover:bg-gray-50'>Demo Admin</button>
+            <button onClick={() => navigate('/login')} className='bg-primary text-white px-5 py-2 rounded-full text-sm font-medium'>Login</button>
+          </div>
+        )}
         <img onClick={() => setShowMenu(true)} className='w-6 md:hidden' src={assets.menu_icon} alt="" />
-
       </div>
 
       <div className={`${showMenu ? 'fixed w-full' : 'hidden'}`} >
         {/* ----------- Mobile Menu   ----------------- */}
-        <div className={`${showMenu ? 'fixed w-full' : 'left-0 w-0'}  right-0 top-0 bottom-0 z-20 overflow-hidden bg-white transition-all`}>
-          <div className='flex item-center justify-between px-5 py-6'>
+        <div className={`${showMenu ? 'fixed w-full right-0' : 'left-0 w-0'} top-0 bottom-0 z-20 overflow-hidden bg-white transition-all`}>
+          <div className='flex items-center justify-between px-5 py-6'>
             <img className='w-36' src={assets.logo} alt="" />
             <img className='w-7' onClick={() => setShowMenu(false)} src={assets.cross_icon} alt="" />
           </div>
-          <ul className='flex flex-col item-center gap-2 mt-5 px-5 text-lg font-medium '>
-            <NavLink to='/'><p className='px-4 py-2 rounded  inline-block' onClick={() => setShowMenu(false)}>Home</p></NavLink>
-            <NavLink to='/doctor'><p className='px-4 py-2 rounded  inline-block' onClick={() => setShowMenu(false)}>ALL DOCTORS</p></NavLink>
-            <NavLink to='/about'><p className='px-4 py-2 rounded  inline-block' onClick={() => setShowMenu(false)}>ABOUT</p></NavLink>
-            <NavLink to='/contact'><p className='px-4 py-2 rounded  inline-block' onClick={() => setShowMenu(false)}>CONTACT</p></NavLink>
-          </ul>
+          <div className='px-5'>
+            <input
+              value={searchTerm}
+              onChange={e=> setSearchTerm(e.target.value)}
+              placeholder='Search doctors...'
+              className='w-full mb-4 px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary/40'
+            />
+            <ul className='flex flex-col items-start gap-1 mt-2 text-base font-medium '>
+              <NavLink to='/' onClick={()=> setShowMenu(false)} className='px-3 py-2 rounded hover:bg-gray-100 w-full'>Home</NavLink>
+              <NavLink to='/doctors' onClick={()=> setShowMenu(false)} className='px-3 py-2 rounded hover:bg-gray-100 w-full'>Doctors</NavLink>
+              <NavLink to='/about' onClick={()=> setShowMenu(false)} className='px-3 py-2 rounded hover:bg-gray-100 w-full'>About</NavLink>
+              <NavLink to='/contact' onClick={()=> setShowMenu(false)} className='px-3 py-2 rounded hover:bg-gray-100 w-full'>Contact</NavLink>
+              {isAdmin && <NavLink to='/admin/overview' onClick={()=> setShowMenu(false)} className='px-3 py-2 rounded hover:bg-gray-100 w-full'>Admin</NavLink>}
+              {!user && (
+                <div className='flex gap-2 mt-3'>
+                  <button onClick={()=> { loginDemo('PATIENT'); setShowMenu(false);}} className='px-3 py-1 border rounded text-xs'>Demo Patient</button>
+                  <button onClick={()=> { loginDemo('ADMIN'); setShowMenu(false);}} className='px-3 py-1 border rounded text-xs'>Demo Admin</button>
+                </div>
+              )}
+              {user && <button onClick={()=> { logout(); setShowMenu(false);}} className='mt-3 text-left text-red-500 text-sm'>Logout</button>}
+            </ul>
+          </div>
         </div>
       </div>
 
