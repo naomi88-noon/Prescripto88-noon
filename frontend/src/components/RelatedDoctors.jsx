@@ -37,7 +37,7 @@ useEffect(()=>{
                 </div>
           ))}
        </div>
-       <button onClick={()=> navigate('/doctors')} className='bg-blue-500 text-white px-12 py-3 rounded-full mt-10'>More</button>
+       <button className='bg-blue-500 text-white px-12 py-3 rounded-full mt-10'>More</button>
 
     </div>
   )

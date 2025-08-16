@@ -12,13 +12,11 @@ export const env = {
   port: parseInt(requireEnv('PORT', '3001'), 10),
   nodeEnv: requireEnv('NODE_ENV', 'development'),
   corsOrigin: requireEnv('CORS_ORIGIN', 'http://localhost:5173'),
-  db: {
-    host: requireEnv('DB_HOST'),
-    port: parseInt(requireEnv('DB_PORT', '3306'), 10),
-    user: requireEnv('DB_USER'),
-    password: requireEnv('DB_PASSWORD'),
-    name: requireEnv('DB_NAME'),
-  },
+  corsOrigins: process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+    : [requireEnv('CORS_ORIGIN', 'http://localhost:5173')],
+    
+  db:requireEnv('DATABASE_URL'),
   jwt: {
     accessSecret: requireEnv('JWT_ACCESS_SECRET'),
     accessTtl: parseInt(requireEnv('ACCESS_TOKEN_TTL', '900'), 10),

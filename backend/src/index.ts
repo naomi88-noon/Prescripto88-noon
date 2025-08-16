@@ -15,12 +15,21 @@ import { appointmentRouter } from './modules/appointments/appointment.routes';
 import { userRouter } from './modules/users/user.routes';
 import { join } from 'path';
 
+
+
 const app = express();
 app.use(helmet());
-app.use(cors({ origin: env.corsOrigin, credentials: true }));
+app.use(cors({ origin: env.corsOrigins,  credentials: true }));
 app.use(express.json());
 // Static image serving
-app.use('/static/doctor', express.static(join(process.cwd(), 'uploads', 'doctor'), { maxAge: '7d', immutable: true }));
+app.use('/static/doctor', express.static(join(process.cwd(), 'uploads', 'doctor'), {
+  maxAge: '7d',
+  immutable: true,
+  setHeaders: (res, _path) => {
+    // Allow frontend origin to load images
+    res.setHeader('Access-Control-Allow-Origin', env.corsOrigin);
+  },
+}));
 
 // OpenAPI docs (with optional basic auth + hot reload in dev)
 const openapiPath = path.join(__dirname, '..', 'openapi.yaml');

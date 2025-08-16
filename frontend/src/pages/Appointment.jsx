@@ -1,160 +1,241 @@
-import React, {  useContext, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import {AppContext} from '../context/AppContext';
-import { assets } from '../assets/assets_frontend/assets'
+import React, { useEffect, useState, useContext } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { AppContext } from '../context/AppContext';
+import { assets } from '../assets/assets_frontend/assets';
 import RelatedDoctors from '../components/RelatedDoctors';
-
+import axios from 'axios';
+import { API_BASE_URL } from '../utils/config';
 
 const Appointment = () => {
+  const { docId } = useParams();
+  const navigate = useNavigate();
+  const { currencySymbol } = useContext(AppContext);
+  const daysOfWeek = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
-const {docId} = useParams();
-const {doctors, currencySymbol} = useContext(AppContext);
-const daysOfweek = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  const [docInfo, setDocInfo] = useState(null);
+  const [docSlots, setDocSlots] = useState([]);
+  const [slotIndex, setSlotIndex] = useState(0);
+  const [slotTime, setSlotTime] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState('error');
 
-const [docInfo, setDocInfo] = useState(null);
-const [docSlots, setDocSlots] = useState([]);
-const [slotIndex, setSlotIndex] = useState(0);;
-const [slotTime, setSlotTime] = useState('')
+  // Fetch doctor details
+  const fetchDocInfo = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/doctors/${docId}`);
+    const data = response.data;
 
-const fetchDocInfo = () => {
-  const foundDoc = doctors.find(doc => doc.id === docId);
-  setDocInfo(foundDoc || null);
+    // Prepend full URL to image if it exists
+    if (data.image && !data.image.startsWith('http')) {
+      data.image = `${API_BASE_URL}${data.image}`;
+    }
+
+    setDocInfo(data);
+  } catch (err) {
+    console.error('Failed to fetch doctor:', err);
+    setDocInfo(null);
+    setMessage('Failed to load doctor details.');
+    setMessageType('error');
+  }
 };
 
-const getAvailableSlots = async () => {
-  console.log("Getting slots...")
-  const allSlots = [];
+  // Generate time slots
+  const getAvailableSlots = () => {
+    if (!docInfo) return;
 
-    // getting current date
+    const allSlots = [];
     const today = new Date();
 
-  for(let i =0; i < 7; i++){
-    // getting date with index
-    const currentDate = new Date(today);
-    currentDate.setDate(today.getDate() + i);
+    for (let i = 0; i < 7; i++) {
+      const currentDate = new Date(today);
+      currentDate.setDate(today.getDate() + i);
 
-    // setting end time of the date with index
-    const endTime = new Date(today);
-    endTime.setDate(today.getDate() + i);
-    endTime.setHours(21,0,0,0);
+      const endTime = new Date(today);
+      endTime.setDate(today.getDate() + i);
+      endTime.setHours(21, 0, 0, 0);
 
-    // setting hours
-    if (today.getDate() === currentDate.getDate()){
-      currentDate.setHours(currentDate.getHours() > 10 ? currentDate.getHours() + 1 : 10)
-      currentDate.setMinutes(currentDate.getMinutes() > 30 ? 30 : 0)
-    } else {
-      currentDate.setHours(10)
-      currentDate.setMinutes(0)
+      if (today.getDate() === currentDate.getDate()) {
+        currentDate.setHours(currentDate.getHours() > 10 ? currentDate.getHours() + 1 : 10);
+        currentDate.setMinutes(currentDate.getMinutes() > 30 ? 30 : 0);
+      } else {
+        currentDate.setHours(10);
+        currentDate.setMinutes(0);
+      }
+
+      const timeSlots = [];
+      while (currentDate < endTime) {
+        const formattedTime = currentDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        timeSlots.push({ datetime: new Date(currentDate), time: formattedTime });
+        currentDate.setMinutes(currentDate.getMinutes() + 30);
+      }
+
+      allSlots.push(timeSlots);
     }
 
-    let timeSlots = [];
+    setDocSlots(allSlots);
+  };
 
-    while(currentDate < endTime){
-      let formattedTime = currentDate.toLocaleTimeString([],{ hour: '2-digit', minute: '2-digit'});
-
-      // add slot to array
-      timeSlots.push({
-        datetime: new Date(currentDate),
-        time: formattedTime
-      });
-
-      // increment current time by 30 minutes
-      currentDate.setMinutes(currentDate.getMinutes() + 30);
+  // Book appointment
+  const handleBook = async () => {
+    if (!slotTime || !docSlots[slotIndex]) {
+      setMessage('Please select a date and time.');
+      setMessageType('error');
+      return;
     }
 
-     allSlots.push(timeSlots);
+    const slot = docSlots[slotIndex].find(s => s.time === slotTime);
+    if (!slot) {
+      setMessage('Invalid slot selected.');
+      setMessageType('error');
+      return;
+    }
 
-  }
-  setDocSlots(allSlots);
+    const start = slot.datetime;
+    const end = new Date(start.getTime() + 30 * 60 * 1000); // 30 minutes
+    const token = localStorage.getItem('accessToken');
 
-};
+    if (!token) {
+      setMessage('You must be logged in to book an appointment.');
+      setMessageType('error');
+      navigate('/login');
+      return;
+    }
 
-useEffect(()=>{
-  if (doctors.length>0 && docId){
-    fetchDocInfo();
-  }
-},[doctors,docId]);
+    try {
+      setLoading(true);
+      setMessage('');
 
-useEffect(()=>{
- if (docInfo){
-   getAvailableSlots();
- }
-}, [docInfo])
+      await axios.post(
+        `${API_BASE_URL}/appointments`,
+        { doctorId: docInfo.id, start, end },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-useEffect(()=>{
-   console.log("Doctor infor:" , docInfo);
+      setMessage('Appointment booked successfully!');
+      setMessageType('success');
 
-},[docSlots]);
+      setTimeout(() => navigate('/my-appointments'), 1500);
+    } catch (err) {
+      console.error(err);
 
+      if (err.response?.status === 401) {
+        setMessage('Session expired. Please login again.');
+        setMessageType('error');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+        navigate('/login');
+      } else if (err.response?.data?.error?.message) {
+        setMessage(err.response.data.error.message);
+        setMessageType('error');
+      } else {
+        setMessage('Failed to book appointment.');
+        setMessageType('error');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    if (docId) fetchDocInfo();
+  }, [docId]);
 
-  if(!docInfo) return <p className='text-center text-gray-500'>Loading doctor...</p>;
+  useEffect(() => {
+    if (docInfo) getAvailableSlots();
+  }, [docInfo]);
+
+  if (!docInfo) return <p className="text-center text-gray-500">Loading doctor...</p>;
+
   return (
-
     <div>
-      {/*--------------- Doctors Details  --------------*/}
-      <div className='flex flex-col sm:flex-row gap-4'>
-        <div className='w-full sm:max-w-72'>
-          <div className='w-full aspect-[4/3] bg-primary rounded-lg overflow-hidden'>
-            <img className='w-full h-full object-cover' src={docInfo.image} alt={docInfo.name} />
+      {/* Doctor Details */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="w-full sm:max-w-72">
+          <div className="w-full aspect-[4/3] bg-primary rounded-lg overflow-hidden">
+            {docInfo.image && (
+              <img
+                className="w-full h-full object-cover"
+                src={docInfo.image}
+                alt={docInfo.name}
+                crossOrigin="anonymous" 
+              />
+            )}
           </div>
-        </div >
+        </div>
 
-        <div className='flex-1 border  border-gray-400 rounded-lg p-8 py-7 bg-white mx-2 sm:mx-0 mt-[80px] sm:mt-0 '>
-          {/* -------------- Doc Info : name, degree, experience  ------------*/}
-          <p className='flex items-center gap-2 text-2xl font-medium text-gray-900'>
-            {docInfo.name} 
-            <img className='w-5' src={assets.verified_icon} alt="" />
+        <div className="flex-1 border border-gray-400 rounded-lg p-8 py-7 bg-white mx-2 sm:mx-0 mt-[80px] sm:mt-0">
+          <p className="flex items-center gap-2 text-2xl font-medium text-gray-900">
+            {docInfo.name}
+            <img className="w-5" src={assets.verified_icon} alt="" />
+          </p>
+          <div className="flex items-center gap-2 text-sm mt-1 text-gray-600">
+            <p>{docInfo.degree} - {docInfo.speciality}</p>
+            <button className="py-0.5 px-2 border text-xs rounded-full">{docInfo.experienceYears} yrs</button>
+          </div>
+          <div>
+            <p className="flex items-center gap-1 text-sm font-medium text-gray-900 mt-3">
+              About <img src={assets.info_icon} alt="" />
             </p>
-            <div className='flex items-center gap-2 text-sm mt-1 text-gray-600'>
-              <p>{docInfo.degree} - {docInfo.speciality}</p>
-              <button className='py-0.5 px-2 border text-xs rounded-full'>{docInfo.experience}</button>
-            </div>
-
-            {/* ------------- Doctor About  ---------------*/}
-            <div>
-              <p className='flex items-center gap-1 text-sm font-medium text-gray-900 mt-3'>
-                About <img src={assets.info_icon} alt="" />
-                </p>
-              <p className='text-sm text-gray-500 max-w-[700px] mt-1'>{docInfo.about}</p>
-            </div>
-            <p className='text-gray-500 font-medium mt-4'>
-              Appointment fee: <span className='text-gray-600'>{currencySymbol}{docInfo.fee}</span>
-            </p>
+            <p className="text-sm text-gray-500 max-w-[700px] mt-1">{docInfo.about}</p>
+          </div>
+          <p className="text-gray-500 font-medium mt-4">
+            Appointment fee: <span className="text-gray-600">{currencySymbol}{docInfo.fee}</span>
+          </p>
         </div>
       </div>
 
-     {/* --------Booking slots ------ */}
-  <div className='sm:ml-72 sm:pl-4 mt-4 font-medium text-gray-700'>
+      {/* Booking slots */}
+      <div className="sm:ml-72 sm:pl-4 mt-4 font-medium text-gray-700">
         <p>Booking slot</p>
-        <div className='flex items-center gap-3 w-full overflow-x-scroll mt-4'> 
-          {
-          docSlots.length > 0 && docSlots.map((item,index)=>(
-              <div onClick={()=> setSlotIndex(index)} key={index} className={`text-center py-6 px-2 min-w-16 rounded-full cursor-pointer border ${slotIndex === index ? 'bg-primary text-white border-primary' : 'border-gray-200'}`}> 
-                <p>{item[0] && daysOfweek[item[0].datetime.getDay()]} </p>
-                <p>{item[0] && item[0].datetime.getDate()}</p>
-
-              </div>
-            ))
-          }
+        <div className="flex items-center gap-3 w-full overflow-x-scroll mt-4">
+          {docSlots.length > 0 && docSlots.map((item, index) => (
+            <div
+              key={index}
+              onClick={() => setSlotIndex(index)}
+              className={`text-center py-6 px-2 min-w-16 rounded-full cursor-pointer border ${
+                slotIndex === index ? 'bg-primary text-white border-primary' : 'border-gray-200'
+              }`}
+            >
+              <p>{item[0] && daysOfWeek[item[0].datetime.getDay()]}</p>
+              <p>{item[0] && item[0].datetime.getDate()}</p>
+            </div>
+          ))}
         </div>
 
-        <div className='flex items-center gap-3 w-full overflow-x-scroll mt-4'>
-          {docSlots.length > 0 && docSlots[slotIndex].map((item,index)=>(
-            <button  onClick={()=>setSlotTime(item.time)} key={index} className={`text-sm font-light flex-shrink-0 px-5 py-2 rounded-full border ${item.time === slotTime ? 'bg-primary text-white border-primary' : 'text-gray-500 border-gray-300'}`}>
+        <div className="flex items-center gap-3 w-full overflow-x-scroll mt-4">
+          {docSlots.length > 0 && docSlots[slotIndex].map((item, index) => (
+            <button
+              key={index}
+              onClick={() => setSlotTime(item.time)}
+              className={`text-sm font-light flex-shrink-0 px-5 py-2 rounded-full border ${
+                item.time === slotTime ? 'bg-primary text-white border-primary' : 'text-gray-500 border-gray-300'
+              }`}
+            >
               {item.time.toLowerCase()}
             </button>
           ))}
         </div>
-        <button className='bg-primary text-white text-sm font-light px-14 py-3 rounded-full my-6'>Book an Appointment</button>
-     </div>
 
-     {/* -------------- Listing Related Doctors ----------- */}
-  <RelatedDoctors docId={docId} speciality={docInfo.speciality}/>
-     
+        <button
+          onClick={handleBook}
+          disabled={loading}
+          className="bg-primary text-white text-sm font-light px-14 py-3 rounded-full my-6"
+        >
+          {loading ? 'Booking...' : 'Book an Appointment'}
+        </button>
 
+        {message && (
+          <p className={`mt-2 text-sm text-center ${messageType === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+            {message}
+          </p>
+        )}
+      </div>
+
+      <RelatedDoctors docId={docId} speciality={docInfo.speciality} />
     </div>
-  )
-}
+  );
+};
 
-export default Appointment
+export default Appointment;
