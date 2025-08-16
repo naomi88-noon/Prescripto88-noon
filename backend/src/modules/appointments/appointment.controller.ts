@@ -4,34 +4,67 @@ import { Doctor } from '../../models/Doctor';
 import { genId } from '../../utils/id';
 import { AuthRequest } from '../../middlewares/auth';
 
+
 export async function listAppointments(req: AuthRequest, res: Response) {
   if (!req.user)
     return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Login required' } });
+
   let where: any = {};
   if (req.user.role === 'PATIENT') where.patientId = req.user.id;
-  else if (req.user.role === 'DOCTOR') where.doctorId = req.user.id; // if doctor user id matches doctorId (future mapping)
+  else if (req.user.role === 'DOCTOR') where.doctorId = req.user.id;
   // ADMIN sees all
+
   const rows = await Appointment.findAll({ where });
-  res.json(rows);
+
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+  const appointmentsWithDoctor = await Promise.all(
+    rows.map(async (apt) => {
+      const doctor = await Doctor.findByPk(apt.doctorId);
+      let doctorData = null;
+
+      if (doctor) {
+        doctorData = doctor.toJSON();
+        doctorData.image = doctorData.image ? `${baseUrl}${doctorData.image}` : null;
+      }
+
+      return {
+        ...apt.toJSON(),
+        Doctor: doctorData,
+      };
+    })
+  );
+
+  res.json(appointmentsWithDoctor);
 }
+
+
+
 
 export async function createAppointment(req: AuthRequest, res: Response) {
   const { doctorId, start, end } = req.body;
+
   if (!doctorId || !start || !end)
     return res.status(400).json({ error: { code: 'VALIDATION', message: 'Missing fields' } });
+
   const doctor = await Doctor.findByPk(doctorId);
   if (!doctor)
     return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Doctor not found' } });
+
   const startDate = new Date(start);
   const endDate = new Date(end);
+
   if (!(startDate instanceof Date) || !(endDate instanceof Date) || isNaN(startDate.getTime()) || isNaN(endDate.getTime()))
     return res.status(400).json({ error: { code: 'VALIDATION', message: 'Invalid date format' } });
+
   if (startDate >= endDate)
     return res.status(400).json({ error: { code: 'VALIDATION', message: 'Start must be before end' } });
-  const maxDurationMs = 2 * 60 * 60 * 1000;
+
+  const maxDurationMs = 2 * 60 * 60 * 1000; // 2 hours
   if (endDate.getTime() - startDate.getTime() > maxDurationMs)
     return res.status(400).json({ error: { code: 'VALIDATION', message: 'Duration too long' } });
-  // Overlap check: any existing booked appointment for doctor overlapping interval
+
+  // Overlap check
   const overlap = await Appointment.findOne({
     where: {
       doctorId,
@@ -41,14 +74,27 @@ export async function createAppointment(req: AuthRequest, res: Response) {
   });
   if (overlap)
     return res.status(409).json({ error: { code: 'SLOT_TAKEN', message: 'Slot already booked' } });
+
+  // Create appointment
   const apt = await Appointment.create({
     id: genId('apt'),
     doctorId,
     patientId: req.user!.id,
-    start: new Date(start),
-    end: new Date(end),
+    start: startDate,
+    end: endDate,
+    status: 'BOOKED',
   });
-  res.status(201).json(apt);
+
+  // Prepare doctor image with full URL
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const doctorData = doctor.toJSON();
+  doctorData.image = doctorData.image ? `${baseUrl}${doctorData.image}` : null;
+
+  // Return appointment + doctor details
+  res.status(201).json({
+    ...apt.toJSON(),
+    Doctor: doctorData,
+  });
 }
 
 export async function cancelAppointment(req: AuthRequest, res: Response) {

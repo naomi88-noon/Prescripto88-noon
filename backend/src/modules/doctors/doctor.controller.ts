@@ -6,6 +6,7 @@ import { Op } from 'sequelize';
 export async function listDoctors(req: Request, res: Response) {
   const { speciality, search, page = '1', limit = '20' } = req.query as Record<string, string>;
   const where: any = {};
+
   if (speciality) where.speciality = speciality;
   if (search) {
     where[Op.or] = [
@@ -14,22 +15,40 @@ export async function listDoctors(req: Request, res: Response) {
       { degree: { [Op.like]: `%${search}%` } },
     ];
   }
+
   const p = parseInt(page, 10);
   const l = parseInt(limit, 10);
+
   const { rows, count } = await Doctor.findAndCountAll({
     where,
     offset: (p - 1) * l,
     limit: l,
     order: [['createdAt', 'DESC']],
   });
-  res.json({ data: rows, meta: { page: p, limit: l, total: count } });
+
+  // Add full image URL
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const doctorsWithImage = rows.map((doc: any) => ({
+    ...doc.toJSON(),
+    image: doc.image ? `${baseUrl}${doc.image}` : null,
+  }));
+
+  res.json({
+    data: doctorsWithImage,
+    meta: { page: p, limit: l, total: count },
+  });
 }
+
 
 export async function getDoctor(req: Request, res: Response) {
   const doctor = await Doctor.findByPk(req.params.id);
-  if (!doctor)
+  if (!doctor){
+    console.log(`Doctor with ID ${req.params.id} not found `);
     return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Doctor not found' } });
-  res.json(doctor);
+  }
+  console.log(` Doctor with ID ${req.params.id} retrieved successfully`);
+ res.json(doctor);
+
 }
 
 export async function createDoctor(req: Request, res: Response) {

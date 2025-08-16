@@ -8,5 +8,6 @@ export const doctorRouter = Router();
 doctorRouter.get('/', optionalAuth(), listDoctors); // public list (auth optional)
 doctorRouter.get('/:id', optionalAuth(), getDoctor); // public detail
 doctorRouter.get('/:id/slots', optionalAuth(), getDoctorSlots);
-doctorRouter.post('/', auth(['ADMIN']), uploadDoctorImage.single('image'), createDoctor);
+doctorRouter.post('/', uploadDoctorImage.single('image'), createDoctor);
+//doctorRouter.post('/', auth(['ADMIN']), uploadDoctorImage.single('image'), createDoctor);
 doctorRouter.patch('/:id', auth(['ADMIN']), updateDoctor);
